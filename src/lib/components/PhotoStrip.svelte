@@ -1,14 +1,16 @@
 <script lang="ts">
   import { createEventDispatcher } from "svelte";
   import { createPhotoStrip } from "$lib/utils/canvas";
+  import type { BackgroundId } from "$lib/types";
 
   interface Props {
     photos?: string[];
-    columns?: 1 | 2;
-    label?: string;
+    backgroundId: BackgroundId;
+    requiredCount?: number;
+    onStripReady?: (dataUrl: string) => void;
   }
 
-  let { photos = [], columns = 1, label = "" }: Props = $props();
+  let { photos = [], backgroundId, requiredCount = 4, onStripReady }: Props = $props();
 
   const dispatch = createEventDispatcher<{
     save: string;
@@ -18,8 +20,11 @@
   let stripDataUrl = $state<string | null>(null);
   let isGenerating = $state(false);
 
+  // Regenerate when photos or background changes
   $effect(() => {
-    if (photos.length > 0) {
+    // Access backgroundId to make it a dependency
+    const _bg = backgroundId;
+    if (photos.length >= requiredCount) {
       generateStrip();
     } else {
       stripDataUrl = null;
@@ -27,15 +32,17 @@
   });
 
   async function generateStrip() {
-    if (photos.length === 0) return;
+    if (photos.length < requiredCount) return;
     isGenerating = true;
 
     try {
       stripDataUrl = await createPhotoStrip({
-        photos,
-        label,
-        padding: 20,
+        photos: photos.slice(0, requiredCount),
+        backgroundId,
       });
+      if (stripDataUrl && onStripReady) {
+        onStripReady(stripDataUrl);
+      }
     } catch (err) {
       console.error("Failed to generate strip:", err);
     } finally {
@@ -86,10 +93,15 @@
       </button>
     </div>
   {:else if photos.length > 0}
-    <div class="grid gap-2" style:grid-template-columns={`repeat(${columns}, 1fr)`}>
+    <div class="grid grid-cols-2 gap-2">
       {#each photos as photo, i}
         <div class="photo-item aspect-video rounded overflow-hidden border border-border">
           <img src={photo} alt={`Photo ${i + 1}`} class="w-full h-full object-cover" />
+        </div>
+      {/each}
+      {#each Array(requiredCount - photos.length) as _, i}
+        <div class="photo-item aspect-video rounded overflow-hidden border border-border border-dashed bg-bg-primary/50 flex items-center justify-center">
+          <span class="text-text-muted text-xs font-mono">{photos.length + i + 1}</span>
         </div>
       {/each}
     </div>

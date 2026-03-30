@@ -32,6 +32,7 @@ export interface Settings {
   stripCount: number;
   mirror: boolean;
   soundEnabled: boolean;
+  selectedBackground: BackgroundId;
 }
 
 export interface CameraDevice {
@@ -56,3 +57,12 @@ export interface SessionState {
 
 export type CountdownDuration = 3 | 5 | 10;
 export type StripCount = 3 | 4;
+
+export type BackgroundId = "classic-film" | "elegant-white" | "neon-pink";
+
+export interface StripBackground {
+  id: BackgroundId;
+  name: string;
+  preview: string;
+  photoPositions: { x: number; y: number; width: number; height: number }[];
+}

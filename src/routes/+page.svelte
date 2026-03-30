@@ -1,13 +1,12 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
   import Camera from "$lib/components/Camera.svelte";
   import CountdownTimer from "$lib/components/CountdownTimer.svelte";
   import FilterPanel from "$lib/components/FilterPanel.svelte";
   import CaptureButton from "$lib/components/CaptureButton.svelte";
-  import PhotoStrip from "$lib/components/PhotoStrip.svelte";
   import { session } from "$lib/stores/session";
   import { settings } from "$lib/stores/settings";
-  import { savePhoto } from "$lib/utils/export";
   import type { FilterName } from "$lib/types";
 
   let cameraRef: Camera | undefined = $state();
@@ -15,13 +14,14 @@
 
   let selectedFilter: FilterName = $state("none");
   let isCountingDown = $state(false);
-  let stripMode = $state(false);
 
   let shutterAudio: HTMLAudioElement | undefined = $state();
   let countdownAudio: HTMLAudioElement | undefined = $state();
 
   onMount(() => {
     settings.load();
+    // Clear any previous strip photos when returning to capture page
+    session.endStripMode();
     shutterAudio = new Audio("/sounds/shutter.mp3");
     countdownAudio = new Audio("/sounds/countdown.mp3");
   });
@@ -55,16 +55,14 @@
 
     const result = cameraRef?.capture();
     if (result) {
-      if (stripMode) {
-        session.addStripPhoto(result.dataUrl);
-        if ($session.stripPhotos.length < $settings.stripCount) {
-          setTimeout(() => handleCapture(), 500);
-        } else {
-          session.setCapturing(false);
-        }
+      session.addStripPhoto(result.dataUrl);
+      // Continue capturing if we haven't reached the required count
+      if ($session.stripPhotos.length < $settings.stripCount) {
+        setTimeout(() => handleCapture(), 500);
       } else {
-        session.addPhoto(result.dataUrl, selectedFilter);
         session.setCapturing(false);
+        // Auto-redirect to edit page when strip is complete
+        goto("/edit");
       }
     } else {
       session.setCapturing(false);
@@ -72,33 +70,12 @@
   }
 
   function handleStartStrip() {
-    stripMode = true;
     session.startStripMode();
     handleCapture();
   }
 
-  async function handleSaveStrip(e: CustomEvent<string>) {
-    try {
-      await savePhoto({ dataUrl: e.detail });
-      session.endStripMode();
-      stripMode = false;
-    } catch (err) {
-      console.error("Failed to save strip:", err);
-    }
-  }
-
-  function handleDiscardStrip() {
-    session.endStripMode();
-    stripMode = false;
-  }
-
-  async function handleSavePhoto(dataUrl: string) {
-    try {
-      await savePhoto({ dataUrl });
-    } catch (err) {
-      console.error("Failed to save photo:", err);
-    }
-  }
+  const photosTaken = $derived($session.stripPhotos.length);
+  const photosRequired = $derived($settings.stripCount);
 </script>
 
 <div class="h-screen flex flex-col bg-bg-primary">
@@ -106,12 +83,6 @@
   <header class="flex items-center justify-between px-6 py-4 border-b border-border">
     <h1 class="text-2xl font-display text-accent-primary">Photo Booth</h1>
     <nav class="flex items-center gap-4">
-      <a
-        href="/gallery"
-        class="text-text-muted hover:text-text-primary font-mono text-sm transition-colors"
-      >
-        Gallery ({$session.photos.length})
-      </a>
       <button
         class="text-text-muted hover:text-text-primary font-mono text-sm transition-colors"
         onclick={() => settings.toggleMirror()}
@@ -129,41 +100,6 @@
 
   <!-- Main Content -->
   <main class="flex-1 flex overflow-hidden">
-    <!-- Left Sidebar - Photo Strip -->
-    <aside class="w-64 p-4 border-r border-border overflow-y-auto">
-      <PhotoStrip
-        photos={$session.stripPhotos}
-        label="Photo Booth"
-        on:save={handleSaveStrip}
-        on:discard={handleDiscardStrip}
-      />
-
-      {#if $session.photos.length > 0 && !stripMode}
-        <div class="mt-4">
-          <h3 class="text-text-muted text-xs uppercase tracking-wider mb-3 font-mono">
-            Recent Photos
-          </h3>
-          <div class="space-y-2">
-            {#each $session.photos.slice(-3).reverse() as photo}
-              <div class="relative group">
-                <img
-                  src={photo.dataUrl}
-                  alt="Recent"
-                  class="w-full aspect-video object-cover rounded border border-border"
-                />
-                <button
-                  class="absolute bottom-2 right-2 px-2 py-1 bg-bg-primary/80 rounded text-xs font-mono text-accent-primary opacity-0 group-hover:opacity-100 transition-opacity"
-                  onclick={() => handleSavePhoto(photo.dataUrl)}
-                >
-                  Save
-                </button>
-              </div>
-            {/each}
-          </div>
-        </div>
-      {/if}
-    </aside>
-
     <!-- Center - Camera View -->
     <div class="flex-1 flex flex-col p-4">
       <div class="flex-1 relative rounded-lg overflow-hidden">
@@ -179,6 +115,15 @@
           on:tick={handleCountdownTick}
           on:complete={handleCountdownComplete}
         />
+
+        <!-- Photo counter overlay -->
+        {#if $session.isCapturing}
+          <div class="absolute top-4 left-4 bg-bg-primary/80 px-3 py-2 rounded-lg backdrop-blur-sm">
+            <span class="font-mono text-accent-primary text-lg">
+              {photosTaken + 1} / {photosRequired}
+            </span>
+          </div>
+        {/if}
       </div>
 
       <!-- Capture Controls -->
@@ -186,18 +131,20 @@
         <CaptureButton
           disabled={$session.isCapturing && !isCountingDown}
           isCapturing={isCountingDown}
-          {stripMode}
+          stripMode={true}
           on:capture={handleCapture}
           on:strip={handleStartStrip}
         />
       </div>
     </div>
 
-    <!-- Right Sidebar - Filters & Settings -->
-    <aside class="w-64 p-4 border-l border-border overflow-y-auto">
+    <!-- Right Sidebar - Settings -->
+    <aside class="w-72 p-4 border-l border-border overflow-y-auto space-y-6">
+      <!-- Filter Selection -->
       <FilterPanel selected={selectedFilter} on:change={handleFilterChange} />
 
-      <div class="mt-6">
+      <!-- Other Settings -->
+      <div>
         <h3 class="text-text-muted text-xs uppercase tracking-wider mb-3 font-mono">
           Settings
         </h3>
@@ -218,12 +165,13 @@
           </div>
 
           <div>
-            <span class="block text-sm font-mono text-text-muted mb-1">Strip Count</span>
+            <span class="block text-sm font-mono text-text-muted mb-1">Photos per Strip</span>
             <div class="flex gap-2">
               {#each [3, 4] as count}
                 <button
                   class="flex-1 px-2 py-1 rounded border text-sm font-mono transition-colors {$settings.stripCount === count ? 'border-accent-primary text-accent-primary' : 'border-border text-text-muted hover:border-text-muted hover:text-text-primary'}"
                   onclick={() => settings.setStripCount(count as 3 | 4)}
+                  disabled={$session.stripPhotos.length > 0}
                 >
                   {count} photos
                 </button>

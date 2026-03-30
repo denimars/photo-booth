@@ -56,3 +56,14 @@ export async function getDefaultSaveDirectory(): Promise<string> {
   const pictures = await pictureDir();
   return `${pictures}/PhotoBooth`;
 }
+
+export async function printPhoto(dataUrl: string): Promise<void> {
+  const base64Data = dataUrlToBase64(dataUrl);
+
+  try {
+    await invoke("print_photo", { data: base64Data });
+  } catch (err) {
+    console.error("Failed to print photo:", err);
+    throw err;
+  }
+}

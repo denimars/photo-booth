@@ -81,3 +81,8 @@ export const session = createSessionStore();
 
 export const photoCount = derived(session, ($session) => $session.photos.length);
 export const stripProgress = derived(session, ($session) => $session.stripPhotos.length);
+
+// Helper to check if strip is ready for editing (has photos)
+export function isStripReady(stripPhotos: string[], requiredCount: number): boolean {
+  return stripPhotos.length >= requiredCount;
+}

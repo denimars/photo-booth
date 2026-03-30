@@ -24,32 +24,31 @@ A **desktop photo booth application** built with **Tauri v2** (Rust backend) and
 ---
  
 ## Directory Structure
- 
+
 ```
 photo-booth/
 ├── src/                        # SvelteKit frontend
 │   ├── lib/
 │   │   ├── components/
-│   │   │   ├── Camera.svelte          # Main camera component
-│   │   │   ├── CountdownTimer.svelte  # Countdown timer
-│   │   │   ├── FilterPanel.svelte     # Filter selection panel
-│   │   │   ├── PhotoStrip.svelte      # Combined photo strip
-│   │   │   ├── CaptureButton.svelte   # Shutter button
-│   │   │   └── GalleryGrid.svelte     # Session gallery grid
+│   │   │   ├── Camera.svelte             # Main camera component
+│   │   │   ├── CountdownTimer.svelte     # Countdown timer
+│   │   │   ├── FilterPanel.svelte        # Filter selection panel
+│   │   │   ├── PhotoStrip.svelte         # Photo strip with background
+│   │   │   ├── BackgroundSelector.svelte # Background template selector
+│   │   │   └── CaptureButton.svelte      # Shutter button
 │   │   ├── stores/
 │   │   │   ├── camera.ts              # Svelte store: camera state
 │   │   │   ├── session.ts             # Svelte store: active session photos
 │   │   │   └── settings.ts            # Svelte store: user preferences
 │   │   ├── utils/
-│   │   │   ├── canvas.ts              # Canvas API helpers
+│   │   │   ├── canvas.ts              # Canvas API helpers + strip compositing
 │   │   │   ├── filters.ts             # CSS/Canvas filter definitions
+│   │   │   ├── backgrounds.ts         # Background templates definitions
 │   │   │   └── export.ts              # Image export logic
 │   │   └── types.ts                   # TypeScript interfaces
 │   ├── routes/
 │   │   ├── +layout.svelte             # Global layout
-│   │   ├── +page.svelte               # Main booth page
-│   │   └── gallery/
-│   │       └── +page.svelte           # Gallery page
+│   │   └── +page.svelte               # Main booth page (strip-only mode)
 │   └── app.html
 ├── src-tauri/
 │   ├── src/
@@ -64,14 +63,18 @@ photo-booth/
 │   ├── icons/                         # App icons
 │   └── tauri.conf.json                # Tauri configuration
 ├── static/
-│   ├── fonts/                         # Local fonts
+│   ├── fonts/                         # Local fonts (Playfair Display, DM Mono)
+│   ├── backgrounds/                   # Photo strip background templates (SVG)
+│   │   ├── classic-film.svg
+│   │   ├── elegant-white.svg
+│   │   └── neon-pink.svg
 │   └── sounds/
 │       ├── shutter.mp3                # Shutter sound
-│       └── countdown.mp3              # Countdown sound
+│       └── countdown.mp3              # Countdown beep
 ├── package.json
 ├── svelte.config.js
-├── vite.config.ts
-└── tailwind.config.ts
+├── vite.config.js
+└── tailwind.config.js
 ```
  
 ---
@@ -102,11 +105,16 @@ photo-booth/
 - Real-time filter preview via CSS `filter` property on the video element
 - Filter applied to canvas on export
  
-### 4. Photo Strip
-- **Strip mode**: automatically takes 3 or 4 photos in sequence
-- Combines photos vertically on a single canvas into a strip image
+### 4. Photo Strip (Primary Mode)
+- **Strip-only mode**: app focuses on creating photo strips
+- Automatically takes 3 or 4 photos in sequence
+- User selects a background template before capturing
+- Available backgrounds:
+  - `classic-film` — Dark film strip with sprocket holes
+  - `elegant-white` — Clean white/cream with coral & teal accents
+  - `neon-pink` — Vibrant coral party theme
+- Photos are composited onto selected background
 - Preview strip before saving
-- Optionally add branding/text at the bottom of the strip
  
 ### 5. Save & Export
 - Save photo/strip as `.jpg` or `.png`
@@ -122,28 +130,28 @@ photo-booth/
 ---
  
 ## UI Design / Aesthetic
- 
-**Theme**: Retro-futuristic photo booth — dark background, neon accents, bold serif typography, feels like a real photo booth machine.
- 
+
+**Theme**: Soft & Elegant photo booth — warm neutral background, dusty rose & sage accents, refined typography.
+
 ```
 Colors:
-  --bg-primary:       #0d0d0d
-  --bg-surface:       #1a1a1a
-  --accent-primary:   #f5c518   /* neon yellow */
-  --accent-secondary: #e63946   /* cinematic red */
-  --text-primary:     #f0ede6
-  --text-muted:       #888
-  --border:           #2a2a2a
- 
+  --bg-primary:       #FAFAF8   /* warm off-white */
+  --bg-surface:       #FFFFFF   /* white */
+  --accent-primary:   #D4A59A   /* dusty rose */
+  --accent-secondary: #88AEA4   /* muted sage teal */
+  --text-primary:     #3D3D3D   /* soft charcoal */
+  --text-muted:       #9E9E9E   /* medium gray */
+  --border:           #EBEBEB   /* soft gray */
+
 Fonts:
   Display: "Playfair Display" (serif, bold)
   Body/UI: "DM Mono" (monospace)
- 
+
 Layout:
   - Full-screen camera in the center
-  - Controls panel on the right (filters, settings)
-  - Photo strip on the left (active session)
-  - Large shutter button at the bottom center
+  - Background selector + filters + settings on the right sidebar
+  - Photo strip preview on the left sidebar
+  - Capture button at the bottom center
   - Countdown overlay on top of the video feed
 ```
  
@@ -187,13 +195,22 @@ on:change  // emit filter name
 ### `PhotoStrip.svelte`
 ```svelte
 <!-- Props -->
-let photos: string[]  // array of dataUrls
-let columns: 1 | 2 = 1
-let label: string = ''
- 
+let photos: string[]           // array of dataUrls
+let backgroundId: BackgroundId // selected background template
+let requiredCount: number = 4  // photos needed for strip
+
 <!-- Events -->
 on:save    // emit final canvas dataUrl
 on:discard
+```
+
+### `BackgroundSelector.svelte`
+```svelte
+<!-- Props -->
+let selected: BackgroundId = 'classic-film'
+
+<!-- Events -->
+on:change  // emit BackgroundId
 ```
  
 ---

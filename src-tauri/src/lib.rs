@@ -2,6 +2,7 @@ use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 use tauri::{AppHandle, Manager};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -84,6 +85,54 @@ async fn save_photo(data: String, file_path: String) -> Result<String, String> {
     Ok(file_path)
 }
 
+#[tauri::command]
+async fn print_photo(app: AppHandle, data: String) -> Result<(), String> {
+    let bytes = STANDARD
+        .decode(&data)
+        .map_err(|e| format!("Failed to decode base64: {}", e))?;
+
+    // Create temp file for printing
+    let temp_dir = app
+        .path()
+        .temp_dir()
+        .map_err(|e| format!("Failed to get temp dir: {}", e))?;
+
+    fs::create_dir_all(&temp_dir)
+        .map_err(|e| format!("Failed to create temp dir: {}", e))?;
+
+    let temp_file = temp_dir.join("photobooth_print.jpg");
+    fs::write(&temp_file, bytes).map_err(|e| format!("Failed to write temp file: {}", e))?;
+
+    // Platform-specific print command
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("lpr")
+            .arg("-o")
+            .arg("fit-to-page")
+            .arg(&temp_file)
+            .output()
+            .map_err(|e| format!("Failed to print: {}", e))?;
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("print")
+            .arg(&temp_file)
+            .output()
+            .map_err(|e| format!("Failed to print: {}", e))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("lpr")
+            .arg(&temp_file)
+            .output()
+            .map_err(|e| format!("Failed to print: {}", e))?;
+    }
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -91,7 +140,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
-        .invoke_handler(tauri::generate_handler![get_settings, save_settings, save_photo])
+        .invoke_handler(tauri::generate_handler![get_settings, save_settings, save_photo, print_photo])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -4,13 +4,13 @@ export default {
   theme: {
     extend: {
       colors: {
-        "bg-primary": "#0d0d0d",
-        "bg-surface": "#1a1a1a",
-        "accent-primary": "#f5c518",
-        "accent-secondary": "#e63946",
-        "text-primary": "#f0ede6",
-        "text-muted": "#888888",
-        border: "#2a2a2a",
+        "bg-primary": "#FAFAF8",      // warm off-white
+        "bg-surface": "#FFFFFF",       // white
+        "accent-primary": "#D4A59A",   // dusty rose/soft coral
+        "accent-secondary": "#88AEA4", // muted sage teal
+        "text-primary": "#3D3D3D",     // soft charcoal
+        "text-muted": "#9E9E9E",       // medium gray
+        border: "#EBEBEB",             // soft gray
       },
       fontFamily: {
         display: ['"Playfair Display"', "serif"],

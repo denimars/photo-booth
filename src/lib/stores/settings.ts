@@ -1,6 +1,6 @@
 import { writable } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
-import type { Settings, FilterName, CountdownDuration, StripCount } from "$lib/types";
+import type { Settings, FilterName, CountdownDuration, StripCount, BackgroundId } from "$lib/types";
 
 const defaultSettings: Settings = {
   countdownDuration: 3,
@@ -9,6 +9,7 @@ const defaultSettings: Settings = {
   stripCount: 4,
   mirror: true,
   soundEnabled: true,
+  selectedBackground: "classic-film",
 };
 
 function createSettingsStore() {
@@ -60,6 +61,10 @@ function createSettingsStore() {
     update((s) => ({ ...s, soundEnabled: !s.soundEnabled }));
   }
 
+  function setBackground(background: BackgroundId): void {
+    update((s) => ({ ...s, selectedBackground: background }));
+  }
+
   return {
     subscribe,
     load,
@@ -70,6 +75,7 @@ function createSettingsStore() {
     setStripCount,
     toggleMirror,
     toggleSound,
+    setBackground,
   };
 }
 
