@@ -1,16 +1,17 @@
 <script lang="ts">
   import { createEventDispatcher } from "svelte";
   import { createPhotoStrip } from "$lib/utils/canvas";
-  import type { BackgroundId } from "$lib/types";
+  import type { BackgroundId, PlacedSticker } from "$lib/types";
 
   interface Props {
     photos?: string[];
     backgroundId: BackgroundId;
     requiredCount?: number;
+    stickers?: PlacedSticker[];
     onStripReady?: (dataUrl: string) => void;
   }
 
-  let { photos = [], backgroundId, requiredCount = 4, onStripReady }: Props = $props();
+  let { photos = [], backgroundId, requiredCount = 4, stickers = [], onStripReady }: Props = $props();
 
   const dispatch = createEventDispatcher<{
     save: string;
@@ -19,11 +20,12 @@
 
   let stripDataUrl = $state<string | null>(null);
   let isGenerating = $state(false);
+  let containerRef = $state<HTMLDivElement | null>(null);
 
-  // Regenerate when photos or background changes
+  // Only regenerate when photos or background changes (NOT stickers)
   $effect(() => {
-    // Access backgroundId to make it a dependency
     const _bg = backgroundId;
+    const _photos = photos;
     if (photos.length >= requiredCount) {
       generateStrip();
     } else {
@@ -36,6 +38,7 @@
     isGenerating = true;
 
     try {
+      // Generate strip WITHOUT stickers for preview
       stripDataUrl = await createPhotoStrip({
         photos: photos.slice(0, requiredCount),
         backgroundId,
@@ -50,9 +53,28 @@
     }
   }
 
-  function handleSave() {
-    if (stripDataUrl) {
-      dispatch("save", stripDataUrl);
+  // Generate final strip WITH stickers when saving
+  async function handleSave() {
+    if (!stripDataUrl) return;
+    isGenerating = true;
+
+    try {
+      const containerWidth = containerRef?.offsetWidth || 400;
+      const containerHeight = containerRef?.offsetHeight || 600;
+
+      // Generate final strip with stickers
+      const finalDataUrl = await createPhotoStrip({
+        photos: photos.slice(0, requiredCount),
+        backgroundId,
+        stickers,
+        containerWidth,
+        containerHeight,
+      });
+      dispatch("save", finalDataUrl);
+    } catch (err) {
+      console.error("Failed to generate final strip:", err);
+    } finally {
+      isGenerating = false;
     }
   }
 
@@ -61,7 +83,7 @@
   }
 </script>
 
-<div class="photo-strip bg-bg-surface rounded-lg p-4 border border-border">
+<div class="photo-strip bg-bg-surface rounded-lg p-4 border border-border" bind:this={containerRef}>
   <h3 class="text-text-muted text-xs uppercase tracking-wider mb-3 font-mono">
     Photo Strip ({photos.length})
   </h3>

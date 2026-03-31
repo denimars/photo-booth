@@ -66,3 +66,31 @@ export interface StripBackground {
   preview: string;
   photoPositions: { x: number; y: number; width: number; height: number }[];
 }
+
+export type StickerId =
+  | "crown"
+  | "heart"
+  | "star"
+  | "party-hat"
+  | "sunglasses"
+  | "mustache"
+  | "lips"
+  | "speech-bubble"
+  | "bow"
+  | "sparkle";
+
+export interface Sticker {
+  id: StickerId;
+  name: string;
+  src: string;
+}
+
+export interface PlacedSticker {
+  id: string;
+  stickerId: StickerId;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+}

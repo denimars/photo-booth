@@ -1,5 +1,6 @@
-import type { FilterName, BackgroundId } from "$lib/types";
+import type { FilterName, BackgroundId, PlacedSticker } from "$lib/types";
 import { getBackground } from "./backgrounds";
+import { getStickerById } from "./stickers";
 
 export interface CaptureOptions {
   filter: FilterName;
@@ -122,10 +123,13 @@ function clamp(value: number): number {
 export interface StripOptions {
   photos: string[];
   backgroundId: BackgroundId;
+  stickers?: PlacedSticker[];
+  containerWidth?: number;
+  containerHeight?: number;
 }
 
 export async function createPhotoStrip(options: StripOptions): Promise<string> {
-  const { photos, backgroundId } = options;
+  const { photos, backgroundId, stickers = [], containerWidth, containerHeight } = options;
 
   if (photos.length === 0) {
     throw new Error("No photos provided");
@@ -161,6 +165,38 @@ export async function createPhotoStrip(options: StripOptions): Promise<string> {
       drawImageCover(ctx, img, pos.x, pos.y, pos.width, pos.height);
     }
   });
+
+  // Draw stickers if any
+  if (stickers.length > 0 && containerWidth && containerHeight) {
+    // Calculate scale factor from container to canvas
+    const scaleX = bgImg.width / containerWidth;
+    const scaleY = bgImg.height / containerHeight;
+
+    // Load and draw each sticker
+    for (const sticker of stickers) {
+      const stickerData = getStickerById(sticker.stickerId);
+      if (!stickerData) continue;
+
+      try {
+        const stickerImg = await loadImage(stickerData.src);
+
+        // Calculate position and size on canvas
+        const canvasX = sticker.x * scaleX;
+        const canvasY = sticker.y * scaleY;
+        const canvasWidth = sticker.width * scaleX;
+        const canvasHeight = sticker.height * scaleY;
+
+        // Save context, apply rotation, draw, restore
+        ctx.save();
+        ctx.translate(canvasX + canvasWidth / 2, canvasY + canvasHeight / 2);
+        ctx.rotate((sticker.rotation * Math.PI) / 180);
+        ctx.drawImage(stickerImg, -canvasWidth / 2, -canvasHeight / 2, canvasWidth, canvasHeight);
+        ctx.restore();
+      } catch (err) {
+        console.error("Failed to load sticker:", err);
+      }
+    }
+  }
 
   return canvas.toDataURL("image/jpeg", 0.95);
 }

@@ -53,6 +53,20 @@ function createSessionStore() {
     }));
   }
 
+  function removeStripPhoto(index: number): void {
+    update((state) => ({
+      ...state,
+      stripPhotos: state.stripPhotos.filter((_, i) => i !== index),
+    }));
+  }
+
+  function replaceStripPhoto(index: number, dataUrl: string): void {
+    update((state) => ({
+      ...state,
+      stripPhotos: state.stripPhotos.map((photo, i) => (i === index ? dataUrl : photo)),
+    }));
+  }
+
   function endStripMode(): void {
     update((state) => ({
       ...state,
@@ -72,6 +86,8 @@ function createSessionStore() {
     setCapturing,
     startStripMode,
     addStripPhoto,
+    removeStripPhoto,
+    replaceStripPhoto,
     endStripMode,
     clearSession,
   };

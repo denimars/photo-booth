@@ -14,14 +14,13 @@
 
   let selectedFilter: FilterName = $state("none");
   let isCountingDown = $state(false);
+  let retakeIndex: number | null = $state(null);
 
   let shutterAudio: HTMLAudioElement | undefined = $state();
   let countdownAudio: HTMLAudioElement | undefined = $state();
 
   onMount(() => {
     settings.load();
-    // Clear any previous strip photos when returning to capture page
-    session.endStripMode();
     shutterAudio = new Audio("/sounds/shutter.mp3");
     countdownAudio = new Audio("/sounds/countdown.mp3");
   });
@@ -55,17 +54,23 @@
 
     const result = cameraRef?.capture();
     if (result) {
-      session.addStripPhoto(result.dataUrl);
-      // Continue capturing if we haven't reached the required count
-      if ($session.stripPhotos.length < $settings.stripCount) {
-        setTimeout(() => handleCapture(), 500);
-      } else {
+      if (retakeIndex !== null) {
+        // Replace the photo at retake index
+        session.replaceStripPhoto(retakeIndex, result.dataUrl);
+        retakeIndex = null;
         session.setCapturing(false);
-        // Auto-redirect to edit page when strip is complete
-        goto("/edit");
+      } else {
+        session.addStripPhoto(result.dataUrl);
+        // Continue capturing if we haven't reached the required count
+        if ($session.stripPhotos.length < $settings.stripCount) {
+          setTimeout(() => handleCapture(), 500);
+        } else {
+          session.setCapturing(false);
+        }
       }
     } else {
       session.setCapturing(false);
+      retakeIndex = null;
     }
   }
 
@@ -74,8 +79,24 @@
     handleCapture();
   }
 
+  function handleRetake(index: number) {
+    if (isCountingDown || $session.isCapturing) return;
+    retakeIndex = index;
+    handleCapture();
+  }
+
+  function handleReset() {
+    session.endStripMode();
+    retakeIndex = null;
+  }
+
+  function handleProceedToEdit() {
+    goto("/edit");
+  }
+
   const photosTaken = $derived($session.stripPhotos.length);
   const photosRequired = $derived($settings.stripCount);
+  const isStripComplete = $derived(photosTaken >= photosRequired);
 </script>
 
 <div class="h-screen flex flex-col bg-bg-primary">
@@ -100,6 +121,72 @@
 
   <!-- Main Content -->
   <main class="flex-1 flex overflow-hidden">
+    <!-- Left Sidebar - Photo Preview -->
+    <aside class="w-56 p-4 border-r border-border overflow-y-auto flex flex-col">
+      <h3 class="text-text-muted text-xs uppercase tracking-wider mb-3 font-mono">
+        Photos ({photosTaken}/{photosRequired})
+      </h3>
+
+      <div class="flex-1 space-y-3">
+        {#each Array(photosRequired) as _, index}
+          <div class="relative aspect-[3/4] rounded-lg overflow-hidden border-2 transition-colors {$session.stripPhotos[index] ? 'border-accent-primary' : 'border-border border-dashed'}">
+            {#if $session.stripPhotos[index]}
+              <img
+                src={$session.stripPhotos[index]}
+                alt="Photo {index + 1}"
+                class="w-full h-full object-cover"
+              />
+              <!-- Retake button overlay -->
+              <button
+                class="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center"
+                onclick={() => handleRetake(index)}
+                disabled={isCountingDown || $session.isCapturing}
+              >
+                <span class="text-white text-xs font-mono bg-accent-primary px-2 py-1 rounded">
+                  Retake
+                </span>
+              </button>
+              <!-- Photo number badge -->
+              <div class="absolute top-1 left-1 bg-accent-primary text-white text-xs font-mono w-5 h-5 rounded-full flex items-center justify-center">
+                {index + 1}
+              </div>
+            {:else}
+              <div class="w-full h-full flex items-center justify-center bg-bg-surface">
+                <span class="text-text-muted text-xs font-mono">{index + 1}</span>
+              </div>
+            {/if}
+            <!-- Retaking indicator -->
+            {#if retakeIndex === index && isCountingDown}
+              <div class="absolute inset-0 bg-accent-primary/20 flex items-center justify-center">
+                <span class="text-accent-primary text-xs font-mono">Retaking...</span>
+              </div>
+            {/if}
+          </div>
+        {/each}
+      </div>
+
+      <!-- Action buttons -->
+      <div class="mt-4 space-y-2">
+        {#if isStripComplete}
+          <button
+            class="w-full py-2 px-3 bg-accent-primary text-white rounded-lg font-mono text-sm hover:bg-accent-primary/90 transition-colors"
+            onclick={handleProceedToEdit}
+          >
+            Continue to Edit
+          </button>
+        {/if}
+        {#if photosTaken > 0}
+          <button
+            class="w-full py-2 px-3 border border-border text-text-muted rounded-lg font-mono text-sm hover:border-text-muted hover:text-text-primary transition-colors"
+            onclick={handleReset}
+            disabled={isCountingDown || $session.isCapturing}
+          >
+            Start Over
+          </button>
+        {/if}
+      </div>
+    </aside>
+
     <!-- Center - Camera View -->
     <div class="flex-1 flex flex-col p-4">
       <div class="flex-1 relative rounded-lg overflow-hidden">
@@ -117,10 +204,19 @@
         />
 
         <!-- Photo counter overlay -->
-        {#if $session.isCapturing}
+        {#if $session.isCapturing && retakeIndex === null}
           <div class="absolute top-4 left-4 bg-bg-primary/80 px-3 py-2 rounded-lg backdrop-blur-sm">
             <span class="font-mono text-accent-primary text-lg">
               {photosTaken + 1} / {photosRequired}
+            </span>
+          </div>
+        {/if}
+
+        <!-- Retake indicator overlay -->
+        {#if retakeIndex !== null && isCountingDown}
+          <div class="absolute top-4 left-4 bg-bg-primary/80 px-3 py-2 rounded-lg backdrop-blur-sm">
+            <span class="font-mono text-accent-primary text-lg">
+              Retaking photo {retakeIndex + 1}
             </span>
           </div>
         {/if}
@@ -128,13 +224,20 @@
 
       <!-- Capture Controls -->
       <div class="flex justify-center py-6">
-        <CaptureButton
-          disabled={$session.isCapturing && !isCountingDown}
-          isCapturing={isCountingDown}
-          stripMode={true}
-          on:capture={handleCapture}
-          on:strip={handleStartStrip}
-        />
+        {#if isStripComplete && !$session.isCapturing}
+          <div class="text-center">
+            <p class="text-text-muted font-mono text-sm mb-2">All photos captured!</p>
+            <p class="text-text-muted font-mono text-xs">Click on any photo to retake, or continue to edit.</p>
+          </div>
+        {:else}
+          <CaptureButton
+            disabled={$session.isCapturing && !isCountingDown}
+            isCapturing={isCountingDown}
+            stripMode={true}
+            on:capture={handleCapture}
+            on:strip={handleStartStrip}
+          />
+        {/if}
       </div>
     </div>
 
