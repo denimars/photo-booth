@@ -3,15 +3,20 @@
   import { createPhotoStrip } from "$lib/utils/canvas";
   import type { BackgroundId, PlacedSticker } from "$lib/types";
 
+  import type { Snippet } from "svelte";
+
   interface Props {
     photos?: string[];
     backgroundId: BackgroundId;
     requiredCount?: number;
     stickers?: PlacedSticker[];
     onStripReady?: (dataUrl: string) => void;
+    onImageRef?: (el: HTMLImageElement | null) => void;
+    onPreviewRef?: (el: HTMLDivElement | null) => void;
+    stickerOverlay?: Snippet;
   }
 
-  let { photos = [], backgroundId, requiredCount = 4, stickers = [], onStripReady }: Props = $props();
+  let { photos = [], backgroundId, requiredCount = 4, stickers = [], onStripReady, onImageRef, onPreviewRef, stickerOverlay }: Props = $props();
 
   const dispatch = createEventDispatcher<{
     save: string;
@@ -21,6 +26,21 @@
   let stripDataUrl = $state<string | null>(null);
   let isGenerating = $state(false);
   let containerRef = $state<HTMLDivElement | null>(null);
+  let stripImageRef = $state<HTMLImageElement | null>(null);
+  let previewRef = $state<HTMLDivElement | null>(null);
+
+  // Notify parent when refs change
+  $effect(() => {
+    if (onImageRef) {
+      onImageRef(stripImageRef);
+    }
+  });
+
+  $effect(() => {
+    if (onPreviewRef) {
+      onPreviewRef(previewRef);
+    }
+  });
 
   // Only regenerate when photos or background changes (NOT stickers)
   $effect(() => {
@@ -83,7 +103,7 @@
   }
 </script>
 
-<div class="photo-strip bg-bg-surface rounded-lg p-4 border border-border" bind:this={containerRef}>
+<div class="photo-strip bg-bg-surface rounded-lg p-4 border border-border relative z-0" bind:this={containerRef}>
   <h3 class="text-text-muted text-xs uppercase tracking-wider mb-3 font-mono">
     Photo Strip ({photos.length})
   </h3>
@@ -93,12 +113,19 @@
       <span class="text-text-muted font-mono text-sm">Generating strip...</span>
     </div>
   {:else if stripDataUrl}
-    <div class="strip-preview mb-4">
+    <div class="strip-preview mb-4 relative overflow-visible" bind:this={previewRef}>
       <img
+        bind:this={stripImageRef}
         src={stripDataUrl}
         alt="Photo strip preview"
-        class="w-full rounded border border-border"
+        class="w-full rounded"
       />
+      <!-- Sticker overlay slot - positioned exactly over the image -->
+      {#if stickerOverlay}
+        <div class="absolute inset-0">
+          {@render stickerOverlay()}
+        </div>
+      {/if}
     </div>
     <div class="flex gap-2">
       <button
