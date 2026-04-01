@@ -168,9 +168,9 @@ export async function createPhotoStrip(options: StripOptions): Promise<string> {
 
   // Draw stickers if any
   if (stickers.length > 0 && containerWidth && containerHeight) {
-    // Calculate scale factor from container to canvas
-    const scaleX = bgImg.width / containerWidth;
-    const scaleY = bgImg.height / containerHeight;
+    // Use uniform scale based on width to maintain correct sticker positioning
+    // This ensures stickers don't shift when aspect ratios don't match perfectly
+    const scale = bgImg.width / containerWidth;
 
     // Load and draw each sticker
     for (const sticker of stickers) {
@@ -180,11 +180,11 @@ export async function createPhotoStrip(options: StripOptions): Promise<string> {
       try {
         const stickerImg = await loadImage(stickerData.src);
 
-        // Calculate position and size on canvas
-        const canvasX = sticker.x * scaleX;
-        const canvasY = sticker.y * scaleY;
-        const canvasWidth = sticker.width * scaleX;
-        const canvasHeight = sticker.height * scaleY;
+        // Calculate position and size on canvas using uniform scale
+        const canvasX = sticker.x * scale;
+        const canvasY = sticker.y * scale;
+        const canvasWidth = sticker.width * scale;
+        const canvasHeight = sticker.height * scale;
 
         // Save context, apply rotation, draw, restore
         ctx.save();
